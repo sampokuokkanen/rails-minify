@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Rewrites (with --fix) or lists calls to removed attribute methods in ERB
+# templates, the part of the app RuboCop doesn't read.
+#
+#   minify-erb [--fix] [--manifest config/ar_minimizer.json] [paths...]
+require "optparse"
+require "rubocop_minify"
+
+fix = false
+manifest = "config/ar_minimizer.json"
+OptionParser.new do |o|
+  o.banner = "usage: minify-erb [--fix] [--manifest PATH] [paths...]"
+  o.on("--fix", "rewrite the templates in place") { fix = true }
+  o.on("--manifest PATH") { manifest = it }
+end.parse!
+
+root = Dir.pwd
+rewrite = RubocopMinify.rewrite_for(root, manifest: manifest, definition_paths: ["app/**/*.rb", "lib/**/*.rb"], views: true)
+abort "minify-erb: no #{manifest}; run bin/rails ar_minimizer:manifest" unless rewrite
+
+paths = (ARGV.empty? ? ["app"] : ARGV).flat_map { File.directory?(it) ? Dir.glob("#{it}/**/*.erb") : [it] }.sort
+rewritten = 0
+left = 0
+paths.each do |path|
+  template = File.read(path)
+  line_of = ->(offset) { template.byteslice(0, offset).count("\n") + 1 }
+  if fix
+    fixed, manual = RubocopMinify::ERB.fix(template, rewrite)
+    if fixed != template
+      File.write(path, fixed)
+      rewritten += 1
+      puts "rewrote #{path}"
+    end
+    template = fixed
+    line_of = ->(offset) { template.byteslice(0, offset).count("\n") + 1 }
+    manual.each { puts "#{path}:#{line_of.(it.from)}: #{it.message}" }
+    left += manual.size
+  else
+    RubocopMinify::ERB.edits(template, rewrite).each do |edit|
+      puts "#{path}:#{line_of.(edit.from)}: #{edit.message}"
+      left += 1
+    end
+  end
+end
+puts(fix ? "#{rewritten} templates rewritten, #{left} calls to fix by hand" : "#{left} calls")
+exit(left.zero? ? 0 : 1)

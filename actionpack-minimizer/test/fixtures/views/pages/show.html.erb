@@ -1,0 +1,60 @@
+<ul>
+<% comments.each do |c| %>
+  <%= render "comments/comment", comment: c %>
+  <%= render("comments/comment", { comment: c.upcase }) %>
+  <%= render partial: "comments/comment", locals: { comment: c * 2 } %>
+  <%= render "comments/strict", comment: c, tone: "loud" %>
+  <%= render "comments/strict", comment: c %>
+<% end %>
+</ul>
+<%= render "comments/bare" %>
+<%= render partial: "comments/bare" %>
+<%= render "comments/comment", local_hash %>
+<%= render "comments/comment", nil_locals rescue "missing local" %>
+<%= link_to "Plain", "/plain" %>
+<%= link_to "<b>x</b>", "/a?b=1&c=\"2\"" %>
+<%= link_to safe_name, "/safe" %>
+<%= link_to nil, "/nil-name" %>
+<%= link_to "", "/blank-name" %>
+<%= link_to "  ", "/spaces" %>
+<%= link_to 42, "/number" %>
+<%= link_to "Hash", { controller: "x" } rescue "hash url" %>
+<%= link_to "Safe url", safe_url %>
+<%= link_to("With html", "/h", class: "c") %>
+<%= link_to "Block form", "/b" if false %>
+<%= render "posts/card", post_title: "T" do %>block body<% end %>
+<%= render "comments/missing" rescue "missing template" %>
+<%= link_to "Opts", "/o", class: "btn" %>
+<%= link_to safe_name, "/o?a=1&b=2", class: %w[a b], data: { turbo_frame: "_top", count: 3 }, aria: { label: "x" }, disabled: true, title: %(q "x" <b>) %>
+<%= link_to nil, "/nil", { "class" => "s", id: :sym } %>
+<%= link_to "Nils", "/n", class: nil %>
+<%= link_to "Delete", "/d", method: :delete %>
+<%= link_to "Dynamic", "/dyn", class: comments.first %>
+<%= link_to "Safe", safe_url, rel: "nofollow" %>
+<%= link_to("Paren", "/p", { class: "c" }) %>
+<%= (link_to "Bad url", nil, class: "x") rescue "nil url" %>
+<%= link_to "/block" do %>Block <b>body</b> <%= link_to "inner", "/inner" %><% end %>
+<%= link_to "/block?x=1&y=2", class: "card", data: { turbo: false } do %><%= render "comments/bare" %><% end %>
+<%= link_to("/braces", { id: "b" }) { "plain & text" } %>
+<%= link_to "/blank" do %>   <% end %>
+<%= link_to "/nil-body" do nil end %>
+<%= link_to safe_url, title: %(t "q") do %><i>i</i><% end %>
+<%= link_to "/m", method: :post do %>post<% end %>
+<%= link_to "/dyn", class: comments.last do %>dyn<% end %>
+<% notes.each do |n| %><%= render n %><%= render(n, extra: "!") %><% end %>
+<%= render notes %>
+<%= render note_component %>
+<%= render "not/a/partial/#{1}" rescue "interpolated" %>
+<%= render plain_object rescue "no to_partial_path" %>
+<% [true, false].each do |on| %>
+<%= link_to "Dyn #{on}", "/dyn", class: (on ? "on" : nil), data: { turbo: on, n: 1 }, title: comments.first, id: :x %>
+<%= link_to "Bool", "/b", disabled: on, "aria-label" => (on ? "<a>" : "\"q\""), aria: { expanded: on } %>
+<%= link_to "Arr", "/arr", class: ["a", (on && "b"), { c: on }], rel: safe_name %>
+<%= link_to "/dynblock", class: (on ? "card" : "plain"), data: { on: on } do %><b><%= on %></b><% end %>
+<%= link_to notes.first, "/rec", class: comments.last %>
+<% end %>
+<%= link_to "Splat", "/s", **{ class: "x" } %>
+<%= render "shared", x: 1 %>
+<%= render partial: "shared", locals: { x: 2 } %>
+<%= render "fallthrough" %>
+<%= render "nowhere" rescue "missing relative" %>

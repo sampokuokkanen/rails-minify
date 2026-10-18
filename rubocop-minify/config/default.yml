@@ -1,0 +1,14 @@
+Minify/AttributeMethods:
+  Description: >-
+    Rewrites calls to the attribute methods activerecord-minimizer's strict
+    mode removes (name?, name_changed?, saved_change_to_name?, ...) into the
+    calls they stood for.
+  Enabled: true
+  VersionAdded: "0.1"
+  # Written by `bin/rails ar_minimizer:manifest`: which names are removed, and for which attribute.
+  Manifest: config/ar_minimizer.json
+  # Where to look for hand-written methods sharing a removed name (a PORO's
+  # featured?): calls of those names are reported but never rewritten.
+  DefinitionPaths:
+    - "app/**/*.rb"
+    - "lib/**/*.rb"

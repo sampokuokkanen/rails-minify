@@ -1,0 +1,11 @@
+source "https://rubygems.org"
+gemspec
+
+gem "activerecord-minimizer", path: "../activerecord-minimizer"
+gem "actionpack-minimizer", path: "../actionpack-minimizer"
+gem "activesupport-minimizer", path: "../activesupport-minimizer"
+gem "minitest", "~> 5.25"
+gem "rake"
+gem "rails", ">= 8.0"
+gem "omniauth", ">= 2.0"
+gem "sqlite3", ">= 2.1"
