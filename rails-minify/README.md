@@ -14,6 +14,19 @@ config.rails_minify.enabled = true
 (`config.ar_minimizer.enums = false`, `config.rails_minify.patches = [:omniauth]`).
 Ruby 3.4+, Rails 8.0, 8.1 and main.
 
+Turn it on in tests too, so a call to a method strict mode removed fails in CI
+rather than in production. In development, strict mode alone is enough: the
+same errors show up while you work, and the compiling parts, which don't
+follow code reloads, stay off.
+
+```ruby
+# config/environments/test.rb
+config.rails_minify.enabled = true
+
+# config/environments/development.rb
+config.ar_minimizer.slim = true # strict mode, without the rest
+```
+
 ## Strict by default
 
 Active Record defines, for every column, a reader, a writer and 19 more

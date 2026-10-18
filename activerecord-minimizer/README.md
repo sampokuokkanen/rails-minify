@@ -47,6 +47,9 @@ Rails itself still gets what it needs:
 `config.ar_minimizer.strict = false` keeps the removed methods working: the
 first call to one generates it on that model.
 
+Turn `slim` on in development and tests as well as production: the
+errors then show up while you work and in CI. Slim follows code reloads.
+
 ## Compiling call sites
 
 Calls whose receiver is known to be a record of a model with that column are

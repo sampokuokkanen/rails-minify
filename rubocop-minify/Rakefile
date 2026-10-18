@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
+require "bundler/gem_tasks"
 require "rake/testtask"
+
+# One repository, five gems: release tags are rubocop-minify-v<version>.
+Bundler::GemHelper.tag_prefix = "rubocop-minify-"
 
 Rake::TestTask.new { it.pattern = "test/**/*_test.rb" }
 task default: :test

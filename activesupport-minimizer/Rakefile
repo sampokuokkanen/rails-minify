@@ -1,4 +1,8 @@
+require "bundler/gem_tasks"
 require "rake/testtask"
+
+# One repository, five gems: release tags are activesupport-minimizer-v<version>.
+Bundler::GemHelper.tag_prefix = "activesupport-minimizer-"
 
 Rake::TestTask.new(:test) do |t|
   t.libs << "test" << "lib"
