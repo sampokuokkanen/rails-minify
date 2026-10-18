@@ -57,7 +57,7 @@ For parts of Rails and common gems that redo work on every request.
   Attachments that are Active Storage blobs, remote images or inline content
   are cached too: a blob without a caption contributes its filename, which a
   hit checks in one query (renamed or deleted: computed again). Other
-  attachables aren't cached. In golf-buddy, 13% of all allocations on its
+  attachables aren't cached. In [Japan Voyage](https://japanvoyage.jp), 13% of all allocations on its
   pages came from it, and guides with images another 4.5%.
 * `:request_host`: `ActionDispatch::Request#host` runs a regexp substitution
   on every call, port or not, and Rails reads it several times per request.
@@ -71,7 +71,7 @@ For parts of Rails and common gems that redo work on every request.
 
 ## Numbers
 
-golf-buddy, 132 production pages, with everything on (strict mode after
+Japan Voyage, 132 production pages, with everything on (strict mode after
 rubocop-minify's rewrites, all patches): identical HTML, and
 1,561,283 → 1,224,141 allocations per pass (−21.6%). The machine was too
 loaded for wall-clock times to mean much.

@@ -81,7 +81,7 @@ Minify/AttributeMethods:
     - "lib/**/*.rb"
 ```
 
-## On golf-buddy
+## On Japan Voyage
 
 191 models: 130 calls in Ruby (app, lib, test, db) and 21 templates rewritten
 automatically; 11 names left for the keep list, all of them names some other

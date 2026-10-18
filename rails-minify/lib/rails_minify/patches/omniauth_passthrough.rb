@@ -3,12 +3,13 @@
 module RailsMinify
   module Patches
     # Every OmniAuth strategy is a middleware that, on every request, dups
-    # itself (and its Hashie::Mash options) before looking at the path: in
-    # golf-buddy about 35k allocations per pass over its pages, none of them
-    # on a login path. Requests that can't be OmniAuth's go straight to the
-    # app; anything that might be (or that the strategy decides at runtime:
-    # callable paths, other_phase, overridden path methods, test mode, a
-    # missing session, which OmniAuth reports) runs OmniAuth as before.
+    # itself (and its Hashie::Mash options) before looking at the path: on
+    # Japan Voyage (japanvoyage.jp) about 35k allocations per pass over its
+    # pages, none of them on a login path. Requests that can't be OmniAuth's
+    # go straight to the app; anything that might be (or that the strategy
+    # decides at runtime: callable paths, other_phase, overridden path
+    # methods, test mode, a missing session, which OmniAuth reports) runs
+    # OmniAuth as before.
     module OmniAuthPassthrough
       # What decides whether a request is the strategy's. A strategy that
       # overrides any of these decides for itself: always run it.

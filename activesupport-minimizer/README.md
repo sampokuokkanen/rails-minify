@@ -77,4 +77,4 @@ validations, 2 before_save, 2 after_save, after_initialize):
 A controller action behind 9 callbacks: 12.6 µs of callback overhead → 4.0 µs
 (6.4 → 2.3 µs with YJIT).
 
-golf-buddy's test suite (4317 runs) gives the same results with it on.
+[Japan Voyage](https://japanvoyage.jp)'s test suite (4317 runs) gives the same results with it on.

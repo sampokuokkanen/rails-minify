@@ -4,9 +4,9 @@ module RailsMinify
   module Patches
     # ActionText::Content#to_plain_text walks the whole HTML tree with
     # Nokogiri on every call, and looks up the record behind every attachment:
-    # in golf-buddy, 13% of all allocations on its pages came from it
-    # (excerpts, meta descriptions, cards). The text is computed once per
-    # distinct HTML and kept, up to MAX_BYTES of HTML.
+    # on Japan Voyage (japanvoyage.jp), 13% of all allocations on its pages
+    # came from it (excerpts, meta descriptions, cards). The text is computed
+    # once per distinct HTML and kept, up to MAX_BYTES of HTML.
     #
     # Without attachments the text depends on the HTML alone. An attachment
     # adds its record's text: for Active Storage blobs "[caption]" (from the

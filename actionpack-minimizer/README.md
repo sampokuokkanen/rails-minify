@@ -102,11 +102,11 @@ With `default_url_options` returning the locale and a `scope "(:locale)"`
 | `trips_path`            | 5547 ns | 167 ns   |
 
 Each helper is a small body calling one shared method. A version with
-specialized branches per helper was 40% faster per call, but with golf-buddy's
+specialized branches per helper was 40% faster per call, but with [Japan Voyage](https://japanvoyage.jp)'s
 ~1,100 helpers it cost 19 MB and made whole pages 3% slower under YJIT
 (more code to compile and keep in cache), so it's gone.
 
-In golf-buddy's controller and integration tests, 34,646 of 34,873 helper
+In Japan Voyage's controller and integration tests, 34,646 of 34,873 helper
 calls (99.3%) took the compiled path.
 
 A page rendering 50 partials with two `link_to` each (`bench/views.rb`):
@@ -118,11 +118,11 @@ per link, 4.4 → 1.1 µs with YJIT. With a computed class: 7.3 → 2.5 µs,
 
 Single-record `render @comment`: 4.9 → 2.6 µs, 10.3 → 5.0 µs without YJIT.
 
-golf-buddy: 999 of 1,080 `render`/`link_to` call sites compile (233 partial
+Japan Voyage: 999 of 1,080 `render`/`link_to` call sites compile (233 partial
 renders, 149 record renders, of which collections and components take Rails'
 path at runtime, 375 `link_to`, 242 block-form `link_to`: all of them).
 
-golf-buddy's test suite (4317 runs) gives the same results with both on.
+Japan Voyage's test suite (4317 runs) gives the same results with both on.
 
 Note: with eager loading, Rails frees each route's AST once routes are
 finalized, so `Route#glob?` raises afterwards; glob status is recorded when

@@ -123,7 +123,7 @@ Rails 8.1, Ruby 4.0, M-series Mac. `bench/calls.rb`, ns per call:
 
 (Measured with the class guard; calls on known receivers skip it.)
 
-On golf-buddy (191 models, 2009 columns):
+On [Japan Voyage](https://japanvoyage.jp) (191 models, 2009 columns):
 
 * Generated attribute methods at boot: 44,835 → about 4,500. Memory used by
   `define_attribute_methods`: 16.4 → about 6 MB; time 374 → about 225 ms.
