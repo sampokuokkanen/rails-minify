@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 (2026-10-18)
+
+- `ar_minimizer:manifest` stops, saying why, when no model's table exists (a database not set up yet), instead of writing a manifest that describes no models.
+
 ## 0.1.2 (2026-10-18)
 
 - Strict mode no longer breaks what gems and Rails call by name, so a keep

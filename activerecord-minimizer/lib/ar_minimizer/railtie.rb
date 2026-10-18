@@ -82,6 +82,12 @@ module ArMinimizer
           Rails.application.eager_load!
           path = Rails.root.join("config/ar_minimizer.json")
           index = ArMinimizer::Index.from_models
+          # Models whose tables can't be read are left out: with none readable
+          # (no database set up yet), the manifest would describe no models.
+          if ActiveRecord::Base.descendants.any? { !it.abstract_class? } &&
+              ActiveRecord::Base.descendants.none? { !it.abstract_class? && ArMinimizer::Index.table?(it) }
+            abort "ar_minimizer: no model's table exists in the #{Rails.env} database; set it up (bin/rails db:prepare) first"
+          end
           File.write(path, ArMinimizer::Manifest.dump(index))
           puts "ar_minimizer: #{path.relative_path_from(Rails.root)} (#{index.size} methods, #{ArMinimizer::Manifest.digest(index)})"
         end
