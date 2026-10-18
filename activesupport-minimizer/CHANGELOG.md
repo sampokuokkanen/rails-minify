@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 (2026-10-18)
+
+- Rails main: the controller terminator (now `AbstractController::Callbacks::TERMINATOR`, a lambda in 8.1) is recognized again, so a before_action is a plain call followed by `performed?` instead of a lambda passed to the terminator: one block less per callback to compile, one allocation less per call.
+- The part of a chain an around callback wraps is a method of its own, which the around gets as a one-line block, instead of a proc holding the rest of the chain: no callbacks in blocks nested in blocks, and no proc allocated per around per run.
+
 ## 0.1.1 (2026-10-18)
 
 - Unrolled callbacks: one method per class and chain instead of one per controller action (`only:`/`except:` become a Set lookup), and classes whose chains are the same share one method body. Fewer methods for the JIT to compile.

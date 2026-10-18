@@ -38,6 +38,11 @@ module AsMinimizer
   # skipped after a halt when the chain says so. For controllers, `only:` and
   # `except:` are a lookup of action_name in the filter's action set.
   #
+  # The part of the chain an around callback wraps is a method of its own
+  # (__as_save_1, ...), which the around gets as a one-line block: the
+  # callbacks run in plain methods rather than blocks nested in blocks, and
+  # nothing is allocated for an around callback that only yields.
+  #
   # One method per class and chain (not per controller action), and one body
   # per distinct chain: classes whose chains come out the same (subclasses of
   # a controller that add no callbacks of their own, ...) get the same method
@@ -48,6 +53,8 @@ module AsMinimizer
   module Unroller
     # Filters and conditions that aren't symbols are referenced from here.
     OBJECTS = []
+    # What a nested level returns when the chain halted in it.
+    HALTED = Object.new.freeze
     # [kind, body] => a module holding the generated method; classes with the
     # same chain define theirs from its UnboundMethod, sharing the body.
     SHARED = {}
@@ -99,16 +106,16 @@ module AsMinimizer
         generator = Generator.new(klass, kind, chain)
         body = generator.source
         warn_missing(klass, kind, generator.targets)
-        name = :"__as_#{kind}"
         shared = SHARED[[kind, body]] ||= begin
           label = "#{klass.name || "anonymous"}##{kind}"
-          code = "# #{label} callbacks (and every class whose chain is the same), unrolled by activesupport-minimizer\n" \
-                 "def #{name}\n#{body}\nend\n"
+          code = "# #{label} callbacks (and every class whose chain is the same), unrolled by activesupport-minimizer\n#{body}"
           Module.new.tap { it.module_eval(code, file_for(klass, kind, label, code), 1) }
         end
-        klass.send(:define_method, name, shared.instance_method(name))
-        klass.send(:private, name)
-        name
+        shared.instance_methods(false).each do |name|
+          klass.send(:define_method, name, shared.instance_method(name))
+          klass.send(:private, name)
+        end
+        :"__as_#{kind}"
       rescue Unsupported
         nil
       end
@@ -159,13 +166,15 @@ module AsMinimizer
         @kind = kind
         @chain = chain
         @config = chain.config
-        @lambdas = 0
         @targets = []
       end
 
+      # The method definitions: __as_<kind>, and one more per around callback.
       def source
         terminator!
-        "halted = false\nvalue = nil\n#{level(levels)}value"
+        @methods = []
+        @methods << "def __as_#{@kind}(&)\nhalted = false\nvalue = nil\n#{level(levels)}value\nend\n"
+        @methods.join
       end
 
       private
@@ -175,7 +184,7 @@ module AsMinimizer
         @terminator =
           if terminator.equal?(ActiveSupport::Callbacks::CallbackChain.const_get(:DEFAULT_TERMINATOR))
             :abort
-          elsif terminator.is_a?(Proc) && terminator.source_location&.first&.end_with?("abstract_controller/callbacks.rb")
+          elsif performed_terminator?(terminator)
             :performed
           else
             object(terminator)
@@ -184,6 +193,15 @@ module AsMinimizer
         # With raise_on_missing_callback_actions, only:/except: go through the
         # filter object, which raises for actions that don't exist.
         @inline_actions = !(@klass.respond_to?(:raise_on_missing_callback_actions) && @klass.raise_on_missing_callback_actions)
+      end
+
+      # Rails 8.1's controller terminator is a lambda; main's is TERMINATOR.
+      def performed_terminator?(terminator)
+        if terminator.is_a?(Proc)
+          terminator.source_location&.first&.end_with?("abstract_controller/callbacks.rb")
+        else
+          defined?(AbstractController::Callbacks::TERMINATOR) && terminator.equal?(AbstractController::Callbacks::TERMINATOR)
+        end
       end
 
       # What CallbackChain#compile builds: each around opens a nested level;
@@ -234,16 +252,22 @@ module AsMinimizer
         check.empty? ? "#{call}\n" : "if #{check.join(" && ")}\n  #{call}\nend\n"
       end
 
-      # The rest of the chain goes in a proc: the around callback gets it as
-      # its block, and it runs directly when the around is skipped.
+      # The rest of the chain is a method of its own: the around callback gets
+      # a block calling it, and it's called directly when the around is
+      # skipped. It returns the chain's value, or HALTED.
       def around(callback, inner)
+        name = "__as_#{@kind}_#{@methods.size}"
+        @methods << "def #{name}(halted, &)\nvalue = nil\n#{inner}halted ? ::AsMinimizer::Unroller::HALTED : value\nend\n"
         cond = conditions(callback)
-        inner_name = "inner#{@lambdas += 1}"
-        code = "#{inner_name} = proc do\n#{inner}end\n" # a Proc, as ActiveSupport passes: extra arguments are ignored
-        return code << "#{inner_name}.()\n" unless cond
-
-        skip = cond == "true" ? "halted" : "halted || !(#{cond})"
-        code << "if #{skip}\n  #{inner_name}.()\nelse\n  #{call(callback, callback.filter, inner_name)}\nend\n"
+        direct = "inner = #{name}(halted, &)\n"
+        code =
+          if cond
+            skip = cond == "true" ? "halted" : "halted || !(#{cond})"
+            "inner = nil\nif #{skip}\n  #{direct.chomp}\nelse\n  #{call(callback, callback.filter, "{ inner = #{name}(halted, &) }")}\nend\n"
+          else
+            direct
+          end
+        code << "if ::AsMinimizer::Unroller::HALTED.equal?(inner)\n  halted = true\n  value = false\nelse\n  value = inner\nend\n"
       end
 
       # Ruby for the callback's :if/:unless, "true" when there are none, nil
@@ -288,18 +312,19 @@ module AsMinimizer
         end
       end
 
+      # block: a block literal ("{ ... }") an around callback runs the rest of the chain with.
       def call(callback, filter, block = nil)
         case filter
-        when Symbol then (@targets << [filter, :filter, callback.kind]; "self.#{method_call(filter)}#{"(&#{block})" if block}")
+        when Symbol then (@targets << [filter, :filter, callback.kind]; "self.#{method_call(filter)}#{" #{block}" if block}")
         when Proc
           case filter.arity
           when 2
             raise Unsupported, "a before/after proc with 2 parameters" unless block # ActiveSupport raises ArgumentError here
-            "instance_exec(self, #{block}, &#{object(filter)})"
+            "instance_exec(self, proc #{block}, &#{object(filter)})"
           when 1, -2 then "instance_exec(self, &#{object(filter)})"
           else "instance_exec(&#{object(filter)})"
           end
-        else "#{object(filter)}.#{scope_method(callback)}(#{["self", ("&#{block}" if block)].compact.join(", ")})"
+        else "#{object(filter)}.#{scope_method(callback)}(self)#{" #{block}" if block}"
         end
       end
 

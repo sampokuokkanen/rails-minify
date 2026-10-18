@@ -84,6 +84,22 @@ For parts of Rails and common gems that redo work on every request.
   installed when OmniAuth already does this itself (it then has a public
   `Strategy#passthrough?`, as in the version proposed upstream).
 
+## ZJIT after boot
+
+```ruby
+config.rails_minify.zjit = true # instead of RUBY_ZJIT_ENABLE=1 / --zjit
+```
+
+`RUBY_ZJIT_ENABLE=1` turns ZJIT on before anything loads, so it also compiles
+what runs only while booting: RubyGems, requiring and eager loading, and the
+minimizers' own compiling. Rails turns YJIT on after boot (`config.yjit`) for
+this reason, but has no such setting for ZJIT; this is that one. It works on
+its own, without the rest of rails-minify.
+
+On Japan Voyage, per process after the same 132 pages: 12,612 → 9,557
+compiled methods, JIT code 45.9 → 35.3 MB, ZJIT memory 82.9 → 64.6 MB,
+RSS about 25 MB less, the same CPU time per page.
+
 ## Numbers
 
 Japan Voyage, 132 production pages, with everything on (strict mode after

@@ -42,6 +42,18 @@ module RailsMinify
       end
     end
 
+    # ZJIT from after boot, as Rails does for YJIT (config.yjit): the code
+    # that only runs while booting (requiring, eager loading, the minimizers'
+    # compiling) isn't compiled. Japan Voyage, per process: 24% fewer
+    # compiled methods, 18 MB less JIT memory, the same speed.
+    initializer "rails_minify.zjit" do |app|
+      config.after_initialize do
+        next unless app.config.rails_minify.zjit && defined?(RubyVM::ZJIT.enable) && !RubyVM::ZJIT.enabled?
+
+        RubyVM::ZJIT.enable
+      end
+    end
+
     rake_tasks do
       namespace :minify do
         prepare = lambda do

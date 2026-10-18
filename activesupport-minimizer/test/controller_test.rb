@@ -117,6 +117,16 @@ class ControllerTest < Minitest::Test
     assert_operator source.scan(".include?(action_name)").size, :>=, 3 # only: :show, except: [:show], only: %i[show edit], ...
   end
 
+  # performed? inline after each before, each around's inner part a method of
+  # its own: no lambda per callback, no blocks nested in blocks.
+  def test_befores_and_arounds_run_without_lambdas_or_nested_blocks
+    source = AsMinimizer::Unroller.source_for(EverythingController, :process_action)
+    assert_includes source, "if performed?"
+    refute_includes source, "-> {"
+    refute_includes source, "proc do"
+    assert_equal 4, source.scan(/^def __as_process_action_\d+\(halted, &\)$/).size # one per around_action
+  end
+
   # Controllers whose chains come out the same share one generated body.
   def test_classes_with_the_same_chain_share_the_method_body
     a, b = %w[SharedAController SharedBController].map do |name|
