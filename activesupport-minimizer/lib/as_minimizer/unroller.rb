@@ -36,13 +36,21 @@ module AsMinimizer
   # throw :abort for the rest, or any custom terminator), around callbacks
   # nesting the rest of the chain, after callbacks last-defined first and
   # skipped after a halt when the chain says so. For controllers, `only:` and
-  # `except:` are decided per action when the method is generated.
+  # `except:` are a lookup of action_name in the filter's action set.
+  #
+  # One method per class and chain (not per controller action), and one body
+  # per distinct chain: classes whose chains come out the same (subclasses of
+  # a controller that add no callbacks of their own, ...) get the same method
+  # body, so a JIT compiles it once.
   #
   # The generated code is named in backtraces ("unrolled: Post#save"), and with
   # source_dir set, written to a file there, so backtraces point at code you can open.
   module Unroller
     # Filters and conditions that aren't symbols are referenced from here.
     OBJECTS = []
+    # [kind, body] => a module holding the generated method; classes with the
+    # same chain define theirs from its UnboundMethod, sharing the body.
+    SHARED = {}
     MUTEX = Mutex.new
     Unsupported = Class.new(StandardError)
 
@@ -62,35 +70,43 @@ module AsMinimizer
       def method_for(target, kind)
         klass = target.class
         chain = target.__callbacks[kind]
-        action = target.action_name if kind == :process_action && target.respond_to?(:action_name)
         cache = klass.instance_variable_get(:@__as_unrolled) ||
           MUTEX.synchronize { klass.instance_variable_get(:@__as_unrolled) || klass.instance_variable_set(:@__as_unrolled, {}) }
-        hit = (per_kind = cache[kind]) && per_kind[action]
+        hit = cache[kind]
         return hit[1] if hit && hit[0].equal?(chain)
 
         MUTEX.synchronize do
-          per_kind = (cache[kind] ||= {})
-          hit = per_kind[action]
+          hit = cache[kind]
           return hit[1] if hit && hit[0].equal?(chain)
 
-          name = generate(klass, kind, action, chain)
-          per_kind[action] = [chain, name]
+          name = generate(klass, kind, chain)
+          cache[kind] = [chain, name]
           name
         end
       end
 
-      def source_for(klass, kind, action = nil) = Generator.new(klass, kind, action, klass.__callbacks[kind]).source
+      def source_for(klass, kind) = Generator.new(klass, kind, klass.__callbacks[kind]).source
+
+      # Generated methods, and the distinct bodies behind them.
+      def stats
+        classes = ObjectSpace.each_object(Class).select { it.instance_variable_defined?(:@__as_unrolled) }
+        { methods: classes.sum { it.instance_variable_get(:@__as_unrolled).count { |_, (_, name)| name } }, bodies: SHARED.size }
+      end
 
       private
 
-      def generate(klass, kind, action, chain)
-        generator = Generator.new(klass, kind, action, chain)
+      def generate(klass, kind, chain)
+        generator = Generator.new(klass, kind, chain)
         body = generator.source
-        warn_missing(klass, kind, action, generator.targets)
-        name = :"__as_#{kind}#{"_#{action.unpack1("H*")}" if action}"
-        label = "#{klass.name || "anonymous"}##{kind}#{"[#{action}]" if action}"
-        code = "# #{label} callbacks, unrolled by activesupport-minimizer\ndef #{name}\n#{body}\nend\n"
-        klass.class_eval(code, file_for(klass, kind, action, label, code), 1)
+        warn_missing(klass, kind, generator.targets)
+        name = :"__as_#{kind}"
+        shared = SHARED[[kind, body]] ||= begin
+          label = "#{klass.name || "anonymous"}##{kind}"
+          code = "# #{label} callbacks (and every class whose chain is the same), unrolled by activesupport-minimizer\n" \
+                 "def #{name}\n#{body}\nend\n"
+          Module.new.tap { it.module_eval(code, file_for(klass, kind, label, code), 1) }
+        end
+        klass.send(:define_method, name, shared.instance_method(name))
         klass.send(:private, name)
         name
       rescue Unsupported
@@ -99,7 +115,7 @@ module AsMinimizer
 
       # Rails finds out when the chain runs (NoMethodError, a 500 for a
       # controller); say so when the method is generated, once per target.
-      def warn_missing(klass, kind, action, targets)
+      def warn_missing(klass, kind, targets)
         targets.each do |name, role, callback_kind|
           next unless Check.status(klass, name) == :missing
 
@@ -108,15 +124,14 @@ module AsMinimizer
 
           @warned[[klass, kind, name]] = true
           AsMinimizer.warn("activesupport-minimizer: #{klass.name || klass}'s #{callback_kind}_#{kind} #{role} #{name.inspect} " \
-            "names no method#{" (action #{action})" if action}; running the chain will raise NoMethodError")
+            "names no method; running the chain will raise NoMethodError")
         end
       end
 
-      def file_for(klass, kind, action, label, code)
+      def file_for(klass, kind, label, code)
         return "unrolled: #{label}" unless source_dir
 
-        path = File.join(source_dir.to_s, (klass.name || "anonymous_#{klass.object_id}").gsub("::", "/"),
-          "#{kind}#{"_#{action}" if action}.rb")
+        path = File.join(source_dir.to_s, (klass.name || "anonymous_#{klass.object_id}").gsub("::", "/"), "#{kind}.rb")
         FileUtils.mkdir_p(File.dirname(path))
         File.write(path, code)
         path
@@ -139,10 +154,9 @@ module AsMinimizer
       # Symbols the generated code calls (filters and conditions that apply).
       attr_reader :targets
 
-      def initialize(klass, kind, action, chain)
+      def initialize(klass, kind, chain)
         @klass = klass
         @kind = kind
-        @action = action
         @chain = chain
         @config = chain.config
         @lambdas = 0
@@ -167,8 +181,9 @@ module AsMinimizer
             object(terminator)
           end
         @skip_after = @config[:skip_after_callbacks_if_terminated]
-        # With raise_on_missing_callback_actions, only:/except: check the action list at runtime.
-        @static_actions = @action && !(@klass.respond_to?(:raise_on_missing_callback_actions) && @klass.raise_on_missing_callback_actions)
+        # With raise_on_missing_callback_actions, only:/except: go through the
+        # filter object, which raises for actions that don't exist.
+        @inline_actions = !(@klass.respond_to?(:raise_on_missing_callback_actions) && @klass.raise_on_missing_callback_actions)
       end
 
       # What CallbackChain#compile builds: each around opens a nested level;
@@ -232,19 +247,21 @@ module AsMinimizer
       end
 
       # Ruby for the callback's :if/:unless, "true" when there are none, nil
-      # when it never runs (an `only:`/`except:` that rules out this action).
+      # when it can never run (an `only:` with no actions).
       def conditions(callback)
         parts = []
         callback.instance_variable_get(:@if).each do |c|
-          if static_action_filter?(c)
-            return nil unless action_listed?(c)
+          if inline_action_filter?(c)
+            return nil if actions_of(c).empty?
+
+            parts << "#{object(actions_of(c))}.include?(action_name)"
           else
             parts << condition(callback, c)
           end
         end
         callback.instance_variable_get(:@unless).each do |c|
-          if static_action_filter?(c)
-            return nil if action_listed?(c)
+          if inline_action_filter?(c)
+            parts << "!#{object(actions_of(c))}.include?(action_name)" unless actions_of(c).empty?
           else
             parts << "!(#{condition(callback, c)})"
           end
@@ -252,11 +269,12 @@ module AsMinimizer
         parts.empty? ? "true" : parts.join(" && ")
       end
 
-      def static_action_filter?(c)
-        @static_actions && defined?(AbstractController::Callbacks::ActionFilter) && c.is_a?(AbstractController::Callbacks::ActionFilter)
+      def inline_action_filter?(c)
+        @inline_actions && defined?(AbstractController::Callbacks::ActionFilter) && c.is_a?(AbstractController::Callbacks::ActionFilter)
       end
 
-      def action_listed?(filter) = filter.instance_variable_get(:@actions).include?(@action)
+      # only:/except: actions, as the frozen Set of Strings Rails keeps.
+      def actions_of(filter) = filter.instance_variable_get(:@actions)
 
       # As CallTemplate.build + make_lambda.
       def condition(callback, c)

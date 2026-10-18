@@ -110,11 +110,23 @@ class ControllerTest < Minitest::Test
     assert_equal [:raised, ArgumentError, "boom"], both(RaisingController, :admin).last
   end
 
-  def test_generated_code_drops_filters_for_other_actions
-    source = AsMinimizer::Unroller.source_for(EverythingController, :process_action, "show")
+  def test_only_and_except_look_up_the_action_in_one_method_per_controller
+    source = AsMinimizer::Unroller.source_for(EverythingController, :process_action)
     assert_includes source, "self.only_show"
-    refute_includes source, "except_show"
-    assert_includes AsMinimizer::Unroller.source_for(EverythingController, :process_action, "admin"), "self.except_show"
+    assert_includes source, "self.except_show"
+    assert_operator source.scan(".include?(action_name)").size, :>=, 3 # only: :show, except: [:show], only: %i[show edit], ...
+  end
+
+  # Controllers whose chains come out the same share one generated body.
+  def test_classes_with_the_same_chain_share_the_method_body
+    a, b = %w[SharedAController SharedBController].map do |name|
+      Class.new(TrackingController) { define_singleton_method(:name) { name } }
+    end
+    bodies = AsMinimizer::Unroller::SHARED.size
+    stock, unrolled = stock_and_unrolled { [a.call_action(:show), b.call_action(:show)] }
+    assert_equal stock, unrolled
+    assert_equal bodies + 1, AsMinimizer::Unroller::SHARED.size if AsMinimizer::Unroller::SHARED.size > bodies
+    assert_equal a.instance_method(:__as_process_action).source_location, b.instance_method(:__as_process_action).source_location
   end
 
   def test_regenerates_when_the_chain_changes

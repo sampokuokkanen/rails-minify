@@ -83,7 +83,7 @@ class CensusTest < Minitest::Test
     end
     result = AsMinimizer::Census.report([CheckPostsController, CheckNote, klass], routed: { "CheckPostsController" => Set["show"] })
     assert_equal 4, result.unrolled # CheckPostsController#show and CheckNote's three chains
-    assert_equal({ "a before/after proc with 2 parameters" => ["CensusOddController#process_action[index]"] }, result.fallbacks)
+    assert_equal({ "a before/after proc with 2 parameters" => ["CensusOddController#process_action"] }, result.fallbacks)
     assert_equal 3, result.problems.size
     assert_includes result.lines.join("\n"), "callback chains: 4/5 unrolled"
   end

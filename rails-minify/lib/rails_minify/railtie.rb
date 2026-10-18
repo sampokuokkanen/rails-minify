@@ -69,15 +69,39 @@ module RailsMinify
           end
         end
 
-        desc "Fail on what would break at runtime or compile stale: missing callback targets, an out-of-date manifest"
+        desc "Fail on callback problems (missing targets, chains longer than callback_limit, " \
+             "callbacks that save their own record) and an out-of-date manifest"
         task check: :environment do
           app = prepare.call
-          problems = AsMinimizer::Check.callback_targets(routed: AsMinimizer::Check.routed_actions(app.routes))
-          missing = problems.select { it.status == :missing }
-          missing.each { puts "  #{it}" }
-          manifest = ArMinimizer::Census.manifest_state(app.root, ArMinimizer::Index.from_models)
-          puts "callback targets: #{missing.size} missing; manifest: #{manifest}"
-          abort if missing.any? || manifest.start_with?("out of date")
+          options = app.config.rails_minify
+          routed = AsMinimizer::Check.routed_actions(app.routes)
+          failed = false
+          report = lambda do |title, items, mode|
+            next puts("#{title}: none") if items.empty?
+
+            puts "#{title}: #{items.size}#{" (warning)" if mode == :warn}"
+            items.each { puts "  #{it}" }
+            failed ||= mode != :warn
+          end
+
+          missing = AsMinimizer::Check.callback_targets(routed: routed).select { it.status == :missing }
+          report.("callback targets naming no method", missing, :fail)
+
+          limit = options.callback_limit || 5
+          report.("callback chains with more than #{limit} of the app's callbacks",
+            AsMinimizer::Check.long_chains(limit: limit, root: app.root.to_s, routed: routed,
+              exclude: options.callback_limit_exclude.nil? ? ["ApplicationController"] : Array(options.callback_limit_exclude)),
+            (options.callback_limit_mode || :fail).to_sym)
+
+          report.("callbacks saving their own record",
+            AsMinimizer::Check.callback_loops(root: app.root.to_s, allow: Array(options.allow_callback_loops)), (options.callback_loops || :fail).to_sym)
+
+          if defined?(ArMinimizer::Census) && app.root.join("config/ar_minimizer.json").exist?
+            manifest = ArMinimizer::Census.manifest_state(app.root, ArMinimizer::Index.from_models)
+            puts "manifest: #{manifest}"
+            failed ||= manifest.start_with?("out of date")
+          end
+          abort if failed
         end
       end
     end

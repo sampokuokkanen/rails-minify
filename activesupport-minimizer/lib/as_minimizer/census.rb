@@ -28,12 +28,14 @@ module AsMinimizer
         klass.__callbacks.each do |kind, chain|
           next if chain.empty?
 
-          actions = kind == :process_action && klass.respond_to?(:action_methods) ? controller_actions(klass, routed) : [nil]
-          actions.each do |action|
-            Unroller::Generator.new(klass, kind, action, chain).source
+          # Controllers no route reaches (abstract ones included) never run their chain.
+          next if kind == :process_action && klass.respond_to?(:action_methods) && controller_actions(klass, routed).empty?
+
+          begin
+            Unroller::Generator.new(klass, kind, chain).source
             unrolled += 1
           rescue Unroller::Unsupported => e
-            fallbacks[e.message] << "#{name}##{kind}#{"[#{action}]" if action}"
+            fallbacks[e.message] << "#{name}##{kind}"
           end
         end
       end

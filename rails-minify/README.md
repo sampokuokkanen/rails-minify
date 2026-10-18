@@ -94,7 +94,26 @@ loaded for wall-clock times to mean much.
 ## Checks
 
 * `bin/rails minify:census`: how much of the app runs compiled, and why the rest doesn't.
-* `bin/rails minify:check`: callbacks naming methods that don't exist (for CI).
+* `bin/rails minify:check` (for CI; works whether or not the rest of
+  rails-minify is on) fails on:
+  * callbacks naming methods that don't exist;
+  * callback chains with more than `callback_limit` (default 5) of the app's
+    own callbacks (Rails' and gems' don't count; controllers per action).
+    Callbacks inherited from `callback_limit_exclude` (default
+    `["ApplicationController"]`: time zone, locale, current user, the
+    per-request basics) don't count either. A base class over the limit is
+    reported once, with the classes that inherit it;
+  * model callbacks that call `save`, `update`, `touch`, ... on the record
+    they run for, which runs the chain again;
+  * an out-of-date manifest.
+
+  ```ruby
+  config.rails_minify.callback_limit = 8
+  config.rails_minify.callback_limit_exclude = ["ApplicationController", "Admin::BaseController"] # [] counts everything
+  config.rails_minify.callback_limit_mode = :warn # report, don't fail
+  config.rails_minify.callback_loops = :warn
+  config.rails_minify.allow_callback_loops = ["Trip#recalculate"] # guarded on purpose
+  ```
 
 ## Things found that are app config, not patches
 

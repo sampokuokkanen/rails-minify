@@ -21,5 +21,5 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "activerecord-minimizer", "~> 0.1"
   spec.add_dependency "actionpack-minimizer", "~> 0.1"
-  spec.add_dependency "activesupport-minimizer", "~> 0.1"
+  spec.add_dependency "activesupport-minimizer", "~> 0.1", ">= 0.1.1"
 end
