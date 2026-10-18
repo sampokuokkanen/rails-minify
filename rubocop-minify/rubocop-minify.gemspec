@@ -23,7 +23,7 @@ Gem::Specification.new do |spec|
   spec.executables = ["minify-erb"]
 
   spec.add_dependency "activerecord-minimizer", "~> 0.1"
-  spec.add_dependency "herb", ">= 0.11"
+  spec.add_dependency "herb", ">= 0.10"
   spec.add_dependency "lint_roller", "~> 1.1"
   spec.add_dependency "prism", ">= 1.4"
   spec.add_dependency "rubocop", ">= 1.72"
