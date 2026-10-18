@@ -10,6 +10,8 @@ class SlimTest < Minitest::Test
       User.new
       # id, id=, id? ... are real methods in ActiveRecord::AttributeMethods::PrimaryKey.
       expected = (User.attribute_names - %w[id] + %w[id_value title]).flat_map { [it, "#{it}="] } + %w[age_changed?]
+      # Rails main defines id_value as a plain reader for most models, with no writer.
+      expected -= %w[id_value=] unless User.attribute_alias?("id_value")
       # Rails calls these itself: enum predicates/scopes, and cache_version.
       expected += %w[status_for_database updated_at_before_type_cast updated_at_came_from_user?]
       assert_equal expected.sort, generated(User)

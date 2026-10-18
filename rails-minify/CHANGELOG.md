@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 (2026-10-18)
+
+- `:omniauth` isn't installed when OmniAuth already skips requests that can't be the strategy's (a public `Strategy#passthrough?`, as in the version proposed upstream); its own helper no longer shares that name.
+
 ## 0.1.0 (2026-10-18)
 
 First release.

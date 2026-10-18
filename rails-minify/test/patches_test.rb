@@ -144,6 +144,16 @@ class OmniAuthPassthroughTest < Minitest::Test
     assert_raises(OmniAuth::NoSessionError) { call("/trips/1", session: nil) }
   end
 
+  def test_not_installed_when_omniauth_skips_these_requests_itself
+    patch = RailsMinify::Patches::OmniAuthPassthrough
+    upstream = Module.new { def passthrough?(_env) = false }
+    released = Module.new
+    patch.install!(upstream)
+    patch.install!(released)
+    refute upstream < patch
+    assert released < patch
+  end
+
   # A strategy that decides for itself which requests are its own (here: any
   # path ending in /sso) always runs.
   class OwnPaths < Probe

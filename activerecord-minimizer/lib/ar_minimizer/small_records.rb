@@ -31,8 +31,12 @@ module ArMinimizer
     end
 
     module AttributeSet
-      def initialize(values, types, additional_types, default_attributes, attributes = nil)
-        super(values, types, additional_types, default_attributes, attributes || (SmallRecords.enabled? ? EMPTY : {}))
+      # Rails 8.0/8.1 pass no attributes for a new set; main passes a fresh
+      # {} (and default_keys after it). Either way, an empty Hash only this
+      # set would own becomes the shared one.
+      def initialize(values, types, additional_types, default_attributes, attributes = nil, *rest)
+        attributes = EMPTY if SmallRecords.enabled? && (attributes.nil? || (attributes.empty? && !attributes.frozen?))
+        super(values, types, additional_types, default_attributes, attributes || {}, *rest)
       end
 
       def []=(name, value)
@@ -76,16 +80,18 @@ module ArMinimizer
     end
 
     module Associations
+      # Only a Hash Rails allocated is replaced: Rails main leaves the cache
+      # nil until an association is used.
       def initialize_dup(*)
         super
-        @association_cache = EMPTY if SmallRecords.enabled?
+        @association_cache = EMPTY if SmallRecords.enabled? && @association_cache
       end
 
       private
 
       def init_internals
         super
-        @association_cache = EMPTY if SmallRecords.enabled? # Rails' {} is dropped right away
+        @association_cache = EMPTY if SmallRecords.enabled? && @association_cache # Rails' {} is dropped right away
       end
 
       def association_instance_set(name, association)

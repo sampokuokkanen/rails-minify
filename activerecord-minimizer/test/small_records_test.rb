@@ -73,9 +73,11 @@ class SmallRecordsTest < Minitest::Test
   def test_read_only_records_share_the_empty_hashes
     a = Author.order(:id).first
     a.name
-    assert a.instance_variable_get(:@association_cache).equal?(EMPTY)
+    cache = a.instance_variable_get(:@association_cache)
+    assert cache.nil? || cache.equal?(EMPTY), "no association cache of its own (Rails main: none at all)"
     assert a.instance_variable_get(:@attributes).instance_variable_get(:@attributes).equal?(EMPTY)
     a.books.to_a
+    assert_kind_of Hash, a.instance_variable_get(:@association_cache)
     refute a.instance_variable_get(:@association_cache).equal?(EMPTY)
     a.name = "changed"
     refute a.instance_variable_get(:@attributes).instance_variable_get(:@attributes).equal?(EMPTY)
@@ -102,6 +104,9 @@ class SmallRecordsTest < Minitest::Test
   def test_records_are_smaller
     stock = with_small(false) { a, b = Author.order(:id).to_a; a.name; b.name; own_bytes(a, b) }
     small = with_small(true) { a, b = Author.order(:id).to_a; a.name; b.name; own_bytes(a, b) }
-    assert_operator stock - small, :>=, 2 * 160 - 1, "stock #{stock} B, small #{small} B"
+    # The attribute set's Hash, and the association cache where Rails
+    # allocates one up front (8.0, 8.1; main leaves it nil until used).
+    hashes = with_small(false) { Author.new.instance_variable_get(:@association_cache) } ? 2 : 1
+    assert_operator stock - small, :>=, hashes * 160 - 1, "stock #{stock} B, small #{small} B"
   end
 end

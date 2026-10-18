@@ -16,8 +16,16 @@ module RailsMinify
       PATH_METHODS = %i[call! on_auth_path? on_request_path? on_callback_path? on_path? request_path
                         callback_path current_path path_prefix script_name].freeze
 
-      def self.install!
-        OmniAuth::Strategy.prepend(self) unless OmniAuth::Strategy < self
+      def self.install!(strategy = OmniAuth::Strategy)
+        return if upstream?(strategy) # OmniAuth does this itself
+
+        strategy.prepend(self) unless strategy < self
+      end
+
+      # The same check in OmniAuth (sampokuokkanen/omniauth@skip-dup-off-auth-paths,
+      # proposed upstream) defines a public Strategy#passthrough?.
+      def self.upstream?(strategy = OmniAuth::Strategy)
+        strategy.public_method_defined?(:passthrough?) && !(strategy < self)
       end
 
       # Per strategy class: are all of PATH_METHODS OmniAuth's own?
@@ -29,14 +37,14 @@ module RailsMinify
       end
 
       def call(env)
-        return super unless passthrough?(env)
+        return super unless minify_passthrough?(env)
 
         @app.call(env)
       end
 
       private
 
-      def passthrough?(env)
+      def minify_passthrough?(env)
         return false if OmniAuth.config.test_mode || !env["rack.session"] || respond_to?(:other_phase)
         return false unless OmniAuthPassthrough.standard_paths?(self.class)
 

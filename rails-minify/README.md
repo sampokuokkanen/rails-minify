@@ -67,7 +67,9 @@ For parts of Rails and common gems that redo work on every request.
   options on every request before looking at the path. Requests that can't
   be OmniAuth's go straight to the app. Only when that's certain up front:
   a session is present, not in test mode, no `other_phase` or callable
-  paths, and the strategy doesn't override how paths are matched.
+  paths, and the strategy doesn't override how paths are matched. Not
+  installed when OmniAuth already does this itself (it then has a public
+  `Strategy#passthrough?`, as in the version proposed upstream).
 
 ## Numbers
 

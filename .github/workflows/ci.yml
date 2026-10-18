@@ -13,6 +13,14 @@ jobs:
       matrix:
         gem: [activerecord-minimizer, activesupport-minimizer, actionpack-minimizer, rails-minify, rubocop-minify]
         ruby: ["3.4", "4.0"]
+        gemfile: [Gemfile]
+        include:
+          # activerecord-minimizer reaches into Active Record internals: also
+          # Rails 8.0 and a pinned commit of main.
+          - { gem: activerecord-minimizer, ruby: "4.0", gemfile: Gemfile.rails80 }
+          - { gem: activerecord-minimizer, ruby: "4.0", gemfile: Gemfile.edge }
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/${{ matrix.gem }}/${{ matrix.gemfile }}
     defaults:
       run:
         working-directory: ${{ matrix.gem }}
