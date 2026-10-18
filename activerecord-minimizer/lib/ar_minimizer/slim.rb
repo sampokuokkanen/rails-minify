@@ -17,11 +17,35 @@ module ArMinimizer
 
     MATCH = ActiveModel::AttributeMethods::ClassMethods::AttributeMethodPattern::AttributeMethod
 
-    # Rails asks respond_to? before calling these, and quietly does something
-    # else when the answer is no: form fields show the cast value instead of
-    # what the user typed, numericality validates the cast value ("abc" -> 0).
-    # Strict mode keeps them answering, generated on first call.
-    PROBED = { "_before_type_cast" => "attribute_before_type_cast", "_came_from_user?" => "attribute_came_from_user?" }.freeze
+    # [prefix, suffix, proxy] of the patterns Rails itself calls by name, for
+    # any attribute. Strict mode generates them on first call instead of
+    # removing them:
+    # - _before_type_cast, _came_from_user?: Rails asks respond_to? first and
+    #   quietly does something else when told no (form fields would show the
+    #   cast value, numericality would validate it: "abc" -> 0).
+    # - _in_database, clear_..._change: increment!/decrement!, and so every
+    #   counter cache, call them on the attribute they change.
+    ON_DEMAND = [
+      ["", "_before_type_cast", "attribute_before_type_cast"],
+      ["", "_came_from_user?", "attribute_came_from_user?"],
+      ["", "_in_database", "attribute_in_database"],
+      ["clear_", "_change", "clear_attribute_change"],
+    ].freeze
+    ON_DEMAND_PROXIES = ON_DEMAND.map(&:last).freeze
+
+    # Methods Rails' own models call by name.
+    FRAMEWORK_KEEP = {
+      "ActiveStorage::Blob" => %w[content_type_previously_changed? metadata_previously_changed? metadata_changed? service_name_changed?],
+      "ActionMailbox::InboundEmail" => %w[status_previously_changed?],
+    }.freeze
+
+    # Columns Devise works with on a model, besides its configured keys: it
+    # calls their dirty-tracking methods by name, some behind respond_to?
+    # (Recoverable clears the reset password token only when it's told the
+    # password or an authentication key will change).
+    DEVISE_COLUMNS = %w[email encrypted_password unconfirmed_email].freeze
+    DEVISE_KEYS = %i[authentication_keys reset_password_keys confirmation_keys unlock_keys
+                     case_insensitive_keys strip_whitespace_keys].freeze
 
     class << self
       attr_reader :keep, :keep_methods
@@ -86,6 +110,7 @@ module ArMinimizer
         return false if Thread.current[:ar_minimizer_generating] == name
         return false if keep.include?(pattern.proxy_target)
         return false if keep_methods.include?(name) || keep_methods.include?("#{model.name}##{name}")
+        return false if FRAMEWORK_KEEP[model.name]&.include?(name)
 
         !framework_calls?(model, pattern.proxy_target, attr_name.to_s)
       end
@@ -145,8 +170,21 @@ module ArMinimizer
         # every enum predicate (`published?`) and enum scope calls status_for_database
         when "attribute_for_database" then model.defined_enums.key?(attr)
         # cache_version, on every cache key with recyclable cache keys
-        when "attribute_before_type_cast", "attribute_came_from_user?" then attr == "updated_at"
-        else false
+        when "attribute_before_type_cast", "attribute_came_from_user?" then attr == "updated_at" || devise_column?(model, attr)
+        else devise_column?(model, attr)
+        end
+      end
+
+      # All of a Devise model's attribute methods for the columns Devise uses.
+      def devise_column?(model, attr)
+        return false unless model.respond_to?(:devise_modules)
+        return true if DEVISE_COLUMNS.include?(attr)
+
+        DEVISE_KEYS.any? do |config|
+          next false unless model.respond_to?(config)
+
+          keys = model.public_send(config)
+          (keys.is_a?(Hash) ? keys.keys : Array(keys)).any? { it.to_s == attr }
         end
       end
     end
@@ -190,7 +228,7 @@ module ArMinimizer
       # without this `user.method(:name_changed?)` raises NameError.
       def respond_to_missing?(name, include_private = false)
         # Strict: matched_attribute_method only matches readers, writers and
-        # the PROBED patterns.
+        # the ON_DEMAND patterns.
         super || (Slim.enabled? && !matched_attribute_method(name.to_s).nil?)
       end
 
@@ -209,7 +247,7 @@ module ArMinimizer
           return super
         end
 
-        Slim.generate(self.class, name.name, match) if Slim.lazy? || Slim::PROBED.value?(match.proxy_target)
+        Slim.generate(self.class, name.name, match) if Slim.lazy? || Slim::ON_DEMAND_PROXIES.include?(match.proxy_target)
         attribute_missing(match, ...)
       end
 
@@ -219,10 +257,10 @@ module ArMinimizer
       def matched_attribute_method(method_name)
         return super unless Slim.strict?
 
-        Slim::PROBED.each do |suffix, proxy|
-          next unless method_name.end_with?(suffix)
+        Slim::ON_DEMAND.each do |prefix, suffix, proxy|
+          next unless method_name.length > prefix.length + suffix.length && method_name.start_with?(prefix) && method_name.end_with?(suffix)
 
-          attr = method_name.delete_suffix(suffix)
+          attr = method_name[prefix.length...-suffix.length]
           klass = self.class
           return Slim::MATCH.new(proxy, attr) if klass._has_attribute?(attr) || klass.attribute_aliases.key?(attr) || @attributes&.key?(attr)
         end

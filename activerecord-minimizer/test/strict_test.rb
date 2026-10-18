@@ -42,6 +42,45 @@ class StrictTest < Minitest::Test
     end
   end
 
+  # increment!/decrement! (and so counter caches) call <attr>_in_database and
+  # clear_<attr>_change by name.
+  def test_increment_and_decrement_work
+    strict do
+      u = User.create!(name: "a", age: 1)
+      u.increment!(:age)
+      u.decrement!(:age, 3)
+      assert_equal [-1, -1, false], [u.age, User.find(u.id).age, u.changed?]
+    end
+  end
+
+  def test_methods_rails_own_models_call_by_name_are_kept
+    strict do
+      klass = Class.new(User) { def self.name = "ActionMailbox::InboundEmail" }
+      record = klass.create!(name: "a")
+      record.update!(status: 1)
+      assert record.status_previously_changed?
+      refute klass.new.respond_to?(:name_was)
+    end
+  end
+
+  # Devise asks respond_to?("will_save_change_to_<key>?") before clearing a
+  # reset password token: a no would leave old reset links working.
+  def test_devise_models_keep_the_methods_of_the_columns_devise_uses
+    strict do
+      klass = Class.new(User) do
+        def self.name = "User"
+        def self.devise_modules = %i[database_authenticatable recoverable]
+        def self.authentication_keys = { name: true }
+      end
+      u = klass.create!(name: "a", age: 1)
+      u.name = "b"
+      assert u.respond_to?("will_save_change_to_name?")
+      assert u.will_save_change_to_name?
+      assert_equal "a", u.name_in_database
+      refute u.respond_to?(:age_was) # not a Devise column
+    end
+  end
+
   def test_the_replacements_answer_the_same
     strict do
       u = User.create!(name: "a")

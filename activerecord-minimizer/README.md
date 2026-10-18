@@ -26,18 +26,25 @@ name_changed? was removed by activerecord-minimizer's strict mode; use attribute
 ```
 
 [rubocop-minify](../rubocop-minify) rewrites those calls in your Ruby and ERB.
-Gems that call them by name (Devise's `will_save_change_to_email?`, Active
-Storage's `service_name_changed?`, counter caches) get them back from a keep
-list, `config/ar_minimizer_keep.txt`, one `name` or `Model#name` per line.
-To find what to put there, run the test suite with `strict = false` and
+What other gems and your own code call by name goes in a keep list,
+`config/ar_minimizer_keep.txt`, one `name` or `Model#name` per line. To find
+what to put there, run the test suite with `strict = false` and
 `AR_MINIMIZER_PROFILE=tmp/ar_minimizer`, then `bin/rails ar_minimizer:profile`.
 
-Rails itself still gets what it needs:
+Rails and common gems still get what they call by name, without a keep list:
 
 * `<attr>_before_type_cast` and `<attr>_came_from_user?` answer `respond_to?`
   and are generated on first call. Form fields and numericality validation ask
   before calling them, and quietly do something else when told no (a form
   would show the cast value, `"abc"` would validate as 0).
+* `<attr>_in_database` and `clear_<attr>_change` are generated on first call:
+  `increment!`/`decrement!`, and so counter caches, use them.
+* Devise models keep every attribute method of the columns Devise uses (email,
+  encrypted_password, unconfirmed_email and the configured keys). Recoverable
+  asks `respond_to?` before clearing the reset password token on a password
+  or email change.
+* Active Storage blobs and Action Mailbox inbound emails keep what those
+  frameworks call (`service_name_changed?`, `status_previously_changed?`, ...).
 * `<enum>_for_database` and `updated_at_before_type_cast`/`_came_from_user?`
   are generated up front: Rails calls them on hot paths.
 * Aliases (`alias_attribute`, Rails' own `id_value`), partial selects
