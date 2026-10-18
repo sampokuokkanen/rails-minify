@@ -51,11 +51,18 @@ RuboCop doesn't read ERB, so `minify-erb` does the same rewrite on the Ruby
 inside each tag (parsed with Herb). Without `--fix` it lists the calls; it
 exits non-zero while any are left, for CI.
 
+Once the calls are rewritten and the rest are in the keep list, both report
+nothing: keep the cop in `.rubocop.yml` and `minify-erb app` in CI, and new
+code that calls a removed method is caught before it runs.
+
 ## What it won't rewrite
 
+Names in activerecord-minimizer's keep list (`config/ar_minimizer_keep.txt`)
+are still generated, so their calls are left alone: a bare `name` everywhere,
+`Model#name` once every model with that attribute is listed.
+
 Receivers aren't typed, so the cop only rewrites what can't mean something
-else, and reports the rest for you to fix by hand or add to the keep list
-(`config/ar_minimizer_keep.txt`):
+else, and reports the rest for you to fix by hand or add to the keep list:
 
 * Names the app also defines (`def featured?` in a presenter, `delegate`,
   `attr_reader`, `alias_method`, ...), scanned from `app/` and `lib/`
@@ -79,11 +86,12 @@ Minify/AttributeMethods:
   DefinitionPaths:
     - "app/**/*.rb"
     - "lib/**/*.rb"
+  KeepList: config/ar_minimizer_keep.txt
 ```
 
 ## On Japan Voyage
 
 191 models: 130 calls in Ruby (app, lib, test, db) and 21 templates rewritten
 automatically; 11 names left for the keep list, all of them names some other
-class defines too. The test suite gives the same results in strict mode
-afterwards.
+class defines too. After that the cop and `minify-erb` report nothing, and
+the test suite gives the same results in strict mode.

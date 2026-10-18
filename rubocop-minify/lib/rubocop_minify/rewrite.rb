@@ -30,10 +30,12 @@ module RubocopMinify
 
     # defined: { method name => "path:line" } of hand-written methods.
     # views: the source is template code (self is a view, never a record).
-    def initialize(index, defined: {}, views: false)
+    # kept: names the keep list still generates (see RubocopMinify.kept_names).
+    def initialize(index, defined: {}, views: false, kept: Set.new)
       @index = index
       @defined = defined
       @views = views
+      @kept = kept
     end
 
     def edits(source)
@@ -112,7 +114,7 @@ module RubocopMinify
     def call_edit(node, cond)
       name = node.name.to_s
       entry = @index[name] or return
-      return if node.block || core?(name)
+      return if @kept.include?(name) || node.block || core?(name)
       return if node.arguments && !entry.args # the generated method takes none: something else
 
       receiver = node.receiver
@@ -182,6 +184,7 @@ module RubocopMinify
     def callback_edit(sym)
       name = sym.unescaped
       entry = @index[name] or return
+      return if @kept.include?(name)
       case self_coverage(entry)
       when :all then nil
       when :some then return report_symbol(sym, "#{name} is removed by strict mode from #{models(entry)}, but not every class this code runs in has it")
@@ -200,7 +203,7 @@ module RubocopMinify
     end
 
     def report_symbol(sym, message)
-      @edits << edit(sym, nil, message) if @index[sym.unescaped] && !core?(sym.unescaped)
+      @edits << edit(sym, nil, message) if @index[sym.unescaped] && !core?(sym.unescaped) && !@kept.include?(sym.unescaped)
     end
 
     # On every record too (readonly?, frozen?, ...) when ActiveRecord is loaded.

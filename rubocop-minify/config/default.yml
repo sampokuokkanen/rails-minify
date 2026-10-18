@@ -12,3 +12,6 @@ Minify/AttributeMethods:
   DefinitionPaths:
     - "app/**/*.rb"
     - "lib/**/*.rb"
+  # activerecord-minimizer's keep list: names strict mode still generates
+  # (on every model that has them) are left alone.
+  KeepList: config/ar_minimizer_keep.txt

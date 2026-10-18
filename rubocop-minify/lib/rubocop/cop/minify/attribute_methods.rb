@@ -22,7 +22,8 @@ module RuboCop
         def on_new_investigation
           rewrite = RubocopMinify.rewrite_for(config.base_dir_for_path_parameters,
             manifest: cop_config.fetch("Manifest", "config/ar_minimizer.json"),
-            definition_paths: Array(cop_config.fetch("DefinitionPaths", ["app/**/*.rb", "lib/**/*.rb"])))
+            definition_paths: Array(cop_config.fetch("DefinitionPaths", ["app/**/*.rb", "lib/**/*.rb"])),
+            keep_list: cop_config.fetch("KeepList", "config/ar_minimizer_keep.txt"))
           return unless rewrite
 
           source = processed_source.raw_source
