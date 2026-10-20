@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-10-20)
 
 - README: the callback checks come first; unrolled callbacks are experimental (no faster in production, ~20 MB more per worker). No code changes.
 

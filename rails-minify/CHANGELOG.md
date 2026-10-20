@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-10-20)
 
 Narrowed to what held up in production (Japan Voyage, each part on half the workers under the same traffic; README, "What paid off in production").
 

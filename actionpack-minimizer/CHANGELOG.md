@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-10-20)
 
 - No longer a dependency of rails-minify: an optional gem. README: experimental, and it needs work (generating before a preloading server forks, a production result) before it's worth turning on. No code changes.
 
