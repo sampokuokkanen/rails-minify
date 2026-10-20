@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 (unreleased)
+
+Narrowed to what held up in production (Japan Voyage, each part on half the workers under the same traffic; README, "What paid off in production").
+
+- `config.rails_minify.enabled` turns on only strict mode (`ar_minimizer.slim`), enums and ZJIT after boot. ZJIT only in production and from Ruby 4.1 (4.0's ZJIT isn't meant for production); set `config.rails_minify.zjit` yourself otherwise.
+- No longer turned on by `enabled`: `ar_minimizer.views`, `.load_time`, `.small_records`, `as_minimizer.unroll_callbacks`, `ap_minimizer.route_helpers`, `.views`, and the patches. Each still works when set on its own and is documented as experimental. Patches: `config.rails_minify.patches = true` for all, or a list.
+- actionpack-minimizer is no longer a dependency; rails-minify loads it, and `minify:census` covers it, when it's in the Gemfile.
+- Requires activerecord-minimizer and activesupport-minimizer 0.2.
+
 ## 0.1.3 (2026-10-18)
 
 - `config.rails_minify.zjit = true` turns ZJIT on after boot, as `config.yjit` does for YJIT, instead of `RUBY_ZJIT_ENABLE=1` compiling boot-only code too. Japan Voyage, per process: 24% fewer compiled methods, 18 MB less JIT memory, about 25 MB less RSS, the same speed.

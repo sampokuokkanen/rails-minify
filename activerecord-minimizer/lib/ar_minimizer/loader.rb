@@ -15,7 +15,7 @@ module ArMinimizer
       # version: changes when the index does (Manifest.digest of the file).
       def install!(index:, patterns:, exclude_patterns: nil, version: nil, guards: false)
         require "require-hooks/setup"
-        @index = index
+        @index = @index_source = index
         @guards = guards
         @mutex = Mutex.new
         if defined?(RequireHooks::Bootsnap) && RequireHooks::Bootsnap.respond_to?(:add_version_hash)
@@ -31,6 +31,13 @@ module ArMinimizer
 
         @mutex.synchronize { @index = @index.call if @index.respond_to?(:call) }
         @index
+      end
+
+      # Lets go of the index (10-20 MB on a large app) once app/ and lib/ are
+      # loaded, before a preloading server forks: a file loaded later indexes
+      # the manifest again.
+      def release_index!
+        @mutex.synchronize { @index = @index_source } if @index_source.respond_to?(:call)
       end
 
       # nil leaves the file as it is.

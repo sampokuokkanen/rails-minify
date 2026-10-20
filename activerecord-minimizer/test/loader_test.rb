@@ -26,4 +26,21 @@ class LoaderTest < Minitest::Test
       assert_equal ["#{dir}/app/loader_probe.rb", 2], LoaderProbe.method(:check).source_location.first(2)
     end
   end
+
+  def test_release_index_indexes_again_on_the_next_load
+    built = 0
+    Dir.mktmpdir do |dir|
+      dir = File.realpath(dir)
+      ArMinimizer::Loader.install!(index: -> { built += 1; index }, patterns: ["#{dir}/*.rb"], version: "test", guards: true)
+      File.write("#{dir}/release_a.rb", "module ReleaseA\n  def self.check(u) = u.name_changed?\nend\n")
+      File.write("#{dir}/release_b.rb", "module ReleaseB\n  def self.check(u) = u.name_changed?\nend\n")
+      require "#{dir}/release_a"
+      assert_equal 1, built
+      ArMinimizer::Loader.release_index!
+      refute_kind_of ArMinimizer::Index, ArMinimizer::Loader.instance_variable_get(:@index)
+      require "#{dir}/release_b"
+      assert_equal 2, built
+      assert_includes RubyVM::InstructionSequence.of(ReleaseB.method(:check)).disasm, "attribute_changed?"
+    end
+  end
 end

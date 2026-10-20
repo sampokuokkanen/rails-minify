@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0 (unreleased)
+
+- README: the callback checks come first; unrolled callbacks are experimental (no faster in production, ~20 MB more per worker). No code changes.
+
 ## 0.1.2 (2026-10-18)
 
 - Rails main: the controller terminator (now `AbstractController::Callbacks::TERMINATOR`, a lambda in 8.1) is recognized again, so a before_action is a plain call followed by `performed?` instead of a lambda passed to the terminator: one block less per callback to compile, one allocation less per call.

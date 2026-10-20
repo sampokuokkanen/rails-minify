@@ -6,20 +6,22 @@ module RailsMinify
 
     # After config/environments/*.rb, before any initializer reads the
     # minimizers' options.
-    config.before_initialize do |app|
-      next unless app.config.rails_minify.enabled
+    config.before_initialize { |app| Railtie.apply_enabled(app.config) }
 
-      ar = app.config.ar_minimizer
+    # `enabled` turns on what made no page slower in production and is worth
+    # having for its own sake: strict mode (fewer generated methods, production
+    # runs what the tests run), enums and ZJIT after boot. Everything else stays
+    # off unless set on its own. ZJIT, like Rails' config.yjit default, not in
+    # development and test, and only from Ruby 4.1: 4.0's ZJIT isn't meant for
+    # production yet.
+    def self.apply_enabled(config, env: Rails.env, ruby: RUBY_VERSION)
+      options = config.rails_minify
+      return unless options.enabled
+
+      ar = config.ar_minimizer
       ar.slim = true if ar.slim.nil?
-      ar.views = true if ar.views.nil?
       ar.enums = true if ar.enums.nil?
-      ar.small_records = true if ar.small_records.nil?
-      ar.load_time = app.root.join("config/ar_minimizer.json").exist? if ar.load_time.nil?
-      as = app.config.as_minimizer
-      as.unroll_callbacks = true if as.unroll_callbacks.nil?
-      ap = app.config.ap_minimizer
-      ap.route_helpers = true if ap.route_helpers.nil?
-      ap.views = true if ap.views.nil?
+      options.zjit = !env.local? && Gem::Version.new(ruby) >= Gem::Version.new("4.1") if options.zjit.nil?
     end
 
     PATCHES = {
@@ -29,10 +31,10 @@ module RailsMinify
     }.freeze
 
     initializer "rails_minify.patches" do |app|
-      options = app.config.rails_minify
-      next unless options.enabled || options.patches
+      patches = app.config.rails_minify.patches
+      next unless patches
 
-      Array(options.patches || PATCHES.keys).each do |name|
+      (patches == true ? PATCHES.keys : Array(patches)).each do |name|
         constant, hook, install = PATCHES.fetch(name.to_sym)
         if hook
           ActiveSupport.on_load(hook) { install.call }
@@ -72,8 +74,10 @@ module RailsMinify
           sections = {
             "Active Record (activerecord-minimizer)" => ArMinimizer::Census.report(root: app.root),
             "Callbacks (activesupport-minimizer)" => AsMinimizer::Census.report(routed: routed),
-            "Routes and views (actionpack-minimizer)" => ApMinimizer::Census.report(app.routes, app.paths["app/views"].existent),
           }
+          if defined?(ApMinimizer::Census)
+            sections["Routes and views (actionpack-minimizer)"] = ApMinimizer::Census.report(app.routes, app.paths["app/views"].existent)
+          end
           sections.each do |title, result|
             puts title
             result.lines(verbose: verbose).each { puts "  #{it}" }

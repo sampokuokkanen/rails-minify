@@ -1,9 +1,32 @@
 # activesupport-minimizer
 
-Runs `ActiveSupport::Callbacks` chains as generated methods: controller
-`before_action`/`around_action`/`after_action`, model `before_save`,
-`after_commit`, validations, `after_initialize`, Active Job callbacks — any
-class using `define_callbacks`. Part of [rails-minify](../rails-minify).
+Finds callback problems Rails only reports when the chain runs, and,
+experimentally, runs `ActiveSupport::Callbacks` chains as generated methods.
+Part of [rails-minify](../rails-minify), whose `bin/rails minify:check` runs
+the checks in CI.
+
+## Checks
+
+`AsMinimizer::Check`, for any class using `define_callbacks` (controllers,
+models, validations, Active Job):
+
+* `callback_targets`: callbacks naming a method that doesn't exist. Rails
+  registers callbacks by name and finds out when the chain runs: for a
+  controller, a 500 on every action the filter covers.
+* `long_chains(limit: 5)`: chains with more than `limit` of the app's own
+  callbacks (Rails' and gems' don't count; controllers per action).
+  Callbacks inherited from `exclude` (default `ApplicationController`) don't
+  count either; a base class over the limit is reported once, with the
+  classes that inherit it.
+* `callback_loops`: model callbacks that call `save`, `update`, `touch`, ...
+  on the record they run for, which runs the chain again (found with Prism),
+  with the guard if there is one.
+
+## Experimental: unrolled callbacks
+
+Off unless set. Faster per call in benchmarks; in production it made pages no
+faster and cost ~20 MB per worker, because each worker generates the methods
+as chains first run (see [Numbers](#numbers)).
 
 ```ruby
 # config/environments/production.rb
@@ -47,7 +70,7 @@ after a halt when the chain says so. Symbols, procs of any arity, objects
 with `raise_on_missing_callback_actions` on they are checked at runtime
 instead, as Rails does. A chain that changes gets a new method.
 
-## Debugging
+### Debugging
 
 Backtraces name the chain and the line in it:
 
@@ -78,3 +101,9 @@ A controller action behind 9 callbacks: 12.6 µs of callback overhead → 4.0 µ
 (6.4 → 2.3 µs with YJIT).
 
 [Japan Voyage](https://japanvoyage.jp)'s test suite (4317 runs) gives the same results with it on.
+
+In production there (Falcon, 6 workers, half of them unrolling, the same
+traffic for an hour, October 2026): no faster, ~20 MB more per worker. That
+was before the app was preloaded; generating the methods at boot, before the
+fork, for the loaded classes would be the next thing to try, and then mostly
+for memory.

@@ -1,8 +1,17 @@
 # actionpack-minimizer
 
-Precompiles named route helpers and the common view helpers. Part of
-[rails-minify](../rails-minify); controller callbacks are in
-activesupport-minimizer.
+Precompiles named route helpers and the common view helpers. Optional
+alongside [rails-minify](../rails-minify), which configures it only when it's
+in your Gemfile; controller callbacks are in activesupport-minimizer.
+
+**Experimental, and it needs work before it's worth turning on.** Route
+helpers are 3-14x faster per call and `render`/`link_to` 2x per page of
+partials in benchmarks, but on [Japan Voyage](https://japanvoyage.jp) in
+production (Falcon, 6 workers, half with it and half without, the same
+traffic for an hour) neither changed view time: a page spends ~30 ms in
+views, and these calls are a small part of it. Generating the helpers and
+compiled templates before a preloading server forks, and a production result
+that shows a difference, come first.
 
 ```ruby
 # config/environments/production.rb
@@ -123,6 +132,8 @@ renders, 149 record renders, of which collections and components take Rails'
 path at runtime, 375 `link_to`, 242 block-form `link_to`: all of them).
 
 Japan Voyage's test suite (4317 runs) gives the same results with both on.
+In production there, route helpers and views each made no difference in view
+time.
 
 Note: with eager loading, Rails frees each route's AST once routes are
 finalized, so `Route#glob?` raises afterwards; glob status is recorded when

@@ -44,6 +44,7 @@ module ArMinimizer
         # File.fnmatch? without FNM_PATHNAME: `*` crosses directories.
         ArMinimizer::Loader.install!(index: manifest, patterns: roots.map { "#{it}/*.rb" }, guards: !!options.guards,
           version: ArMinimizer::Manifest.digest(manifest_json))
+        app.config.after_initialize { ArMinimizer::Loader.release_index! if app.config.eager_load }
       end
 
       # Every model is loaded after eager loading: say so if the manifest no

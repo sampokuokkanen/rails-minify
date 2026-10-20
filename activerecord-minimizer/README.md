@@ -4,8 +4,7 @@ Active Record generates a reader, a writer and one method per attribute
 method pattern for every column of every model: `name?`, `name_changed?`,
 `name_was`, `saved_change_to_name?`, `name_before_type_cast`,
 `restore_name!`, ... 21 patterns in Rails 8.1, so 21 methods per column.
-activerecord-minimizer generates the readers and writers only, and compiles
-the call sites that used the rest into the calls they stood for. Part of
+activerecord-minimizer generates the readers and writers only. Part of
 [rails-minify](../rails-minify).
 
 ```ruby
@@ -57,7 +56,21 @@ first call to one generates it on that model.
 Turn `slim` on in development and tests as well as production: the
 errors then show up while you work and in CI. Slim follows code reloads.
 
-## Compiling call sites
+## Enums
+
+`config.ar_minimizer.enums = true` replaces the closures Rails defines for
+enum predicates and bang methods, which build and intern the
+`<name>_for_database` symbol on every call, with ordinary methods carrying
+the enum's values: `def published? = public_send(:status_for_database) == 1`.
+1.3–1.6× faster predicates; non-finite float values keep Rails' closures.
+
+## Experimental
+
+Each is off unless set. They are faster per call in benchmarks, but made no
+measurable difference on a production app (see [Numbers](#numbers)), and the
+compiling parts cost memory in every worker.
+
+### Compiling call sites
 
 Calls whose receiver is known to be a record of a model with that column are
 compiled to what the generated method would have done:
@@ -92,7 +105,7 @@ Where it compiles:
   `app/` and `lib/` in place instead, like explode_sqlite. Production only (or
   `FORCE=1`); `DRY_RUN=1` previews.
 
-All three read the **manifest**, `config/ar_minimizer.json`, written by
+All three read the **manifest** (strict mode and enums don't need one), `config/ar_minimizer.json`, written by
 `bin/rails ar_minimizer:manifest`: per model its columns and their query kind,
 the attribute method patterns, hand-written methods, superclass, app modules,
 associations, scopes, and names it defines another way (an enum predicate
@@ -103,19 +116,14 @@ stale, and an eager-loading boot logs an error if it is.
 Never compiled: methods any model defines by hand, names used as columns,
 primary key methods, `defined?(...)`, calls with blocks, heredoc arguments.
 
-## More
+### More
 
-* **Enums** (`config.ar_minimizer.enums = true`) replaces the closures Rails
-  defines for enum predicates and bang methods, which build and intern the
-  `<name>_for_database` symbol on every call, with ordinary methods carrying
-  the enum's values: `def published? = public_send(:status_for_database) == 1`.
-  1.3–1.6× faster predicates; non-finite float values keep Rails' closures.
 * **Small records** (`config.ar_minimizer.small_records = true`). A loaded
   record owns two Hashes most records never put anything in, 160 bytes each:
   the association cache and the attribute set's Attribute objects. Both start
   as one shared frozen empty Hash and get their own on the first insert. A
   read-only record goes from 1,480 to 1,160 bytes (23 columns), at the same
-  speed. Destroyed and frozen records still raise on writes.
+  speed. Only worth it on pages that load thousands of records. Destroyed and frozen records still raise on writes.
 * **Census** (`ArMinimizer::Census`, run by rails-minify's
   `bin/rails minify:census`): how many call sites compile, and why the others
   don't.
@@ -139,6 +147,17 @@ On [Japan Voyage](https://japanvoyage.jp) (191 models, 2009 columns):
   `define_attribute_methods`: 16.4 → about 6 MB; time 374 → about 225 ms.
 * Test suite (4317 runs) in strict mode, after rubocop-minify's rewrites and
   with a 41-line keep list: the same results as the untouched app.
+
+In production there (Falcon, 6 workers, half the workers with a part and half
+without, the same traffic for an hour, October 2026):
+
+| part | result |
+|---|---|
+| strict mode | no call to a removed method; the same latency and memory |
+| enums | the same median latency; no change in allocations on these pages |
+| small records | no difference: tens of records per request |
+| compiling in views | no faster, ~22 MB more per worker |
+| compiling at load time | ~12% more CPU per request, not reproduced locally; measured before the app was preloaded, so worth measuring again |
 
 ## Requirements and caveats
 

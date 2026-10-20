@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0 (unreleased)
+
+- With `load_time`, the manifest's index (10-20 MB on a large app) is let go once an eager-loading boot is done, before a preloading server forks; a file loaded later indexes the manifest again.
+- README: strict mode and enums are the core; compiling call sites (`load_time`, `views`, `ar_minimizer:build`, `guards`) and small records are experimental, with the production results. The manifest is only needed by the experimental parts.
+
 ## 0.1.3 (2026-10-18)
 
 - `ar_minimizer:manifest` stops, saying why, when no model's table exists (a database not set up yet), instead of writing a manifest that describes no models.
